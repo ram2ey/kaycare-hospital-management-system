@@ -13,6 +13,20 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: CI_TestPass123!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P CI_TestPass123! -Q 'SELECT 1' -C"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +43,8 @@ jobs:
         run: dotnet build KayCare.sln --configuration Release --no-restore
 
       - name: Run tests
+        env:
+          TEST_DB_CONNECTION: "Server=localhost,1433;Database=KayCareTestDb;User ID=sa;Password=CI_TestPass123!;TrustServerCertificate=True;"
         run: dotnet test src/KayCare.Tests --configuration Release --no-build
 
       - name: Publish

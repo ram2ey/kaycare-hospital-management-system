@@ -41,7 +41,8 @@ public class MediCloudWebAppFactory : WebApplicationFactory<Program>, IAsyncLife
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] =
-                    @"Server=.\SQLEXPRESS;Database=MediCloudTestDb;Integrated Security=True;TrustServerCertificate=True;",
+                    Environment.GetEnvironmentVariable("TEST_DB_CONNECTION")
+                    ?? @"Server=.\SQLEXPRESS;Database=KayCareTestDb;Integrated Security=True;TrustServerCertificate=True;",
                 ["Jwt:Key"]         = TestJwtKey,
                 ["Jwt:Issuer"]      = "MediCloud",
                 ["Jwt:Audience"]    = "MediCloud",
