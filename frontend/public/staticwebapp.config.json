@@ -1,16 +1,6 @@
 {
-  "routes": [
-    {
-      "route": "/api/*",
-      "rewrite": "https://kaycare-prod-api.azurewebsites.net/api/*"
-    },
-    {
-      "route": "/*",
-      "serve": "/index.html",
-      "statusCode": 200
-    }
-  ],
   "navigationFallback": {
-    "rewrite": "/index.html"
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/*.{css,js,ico,png,svg,jpg,woff,woff2}"]
   }
 }
