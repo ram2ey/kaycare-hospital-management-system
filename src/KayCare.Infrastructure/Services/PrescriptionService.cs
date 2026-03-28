@@ -10,14 +10,14 @@ namespace KayCare.Infrastructure.Services;
 
 public class PrescriptionService : IPrescriptionService
 {
-    private readonly AppDbContext _db;
+    private readonly AppDbContext        _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly ITenantContext _tenantContext;
+    private readonly ITenantContext      _tenantContext;
 
     public PrescriptionService(AppDbContext db, ICurrentUserService currentUser, ITenantContext tenantContext)
     {
-        _db = db;
-        _currentUser = currentUser;
+        _db            = db;
+        _currentUser   = currentUser;
         _tenantContext = tenantContext;
     }
 
@@ -114,7 +114,7 @@ public class PrescriptionService : IPrescriptionService
             .Include(p => p.PrescribedBy)
             .Include(p => p.Items)
             .AsNoTracking()
-            .Where(p => p.Status == PrescriptionStatus.Active
+            .Where(p => (p.Status == PrescriptionStatus.Active || p.Status == PrescriptionStatus.PartiallyDispensed)
                      && (p.ExpiresAt == null || p.ExpiresAt >= today))
             .OrderBy(p => p.PrescriptionDate)
             .ThenBy(p => p.CreatedAt)
@@ -123,25 +123,129 @@ public class PrescriptionService : IPrescriptionService
         return rows.Select(MapToSummary).ToList();
     }
 
-    // ── Dispense ──────────────────────────────────────────────────────────────
+    // ── Dispense (full) ───────────────────────────────────────────────────────
 
     public async Task<PrescriptionDetailResponse> DispenseAsync(Guid prescriptionId, DispensePrescriptionRequest req, CancellationToken ct = default)
     {
         var prescription = await _db.Prescriptions
+            .Include(p => p.Items)
             .FirstOrDefaultAsync(p => p.PrescriptionId == prescriptionId, ct)
             ?? throw new NotFoundException(nameof(Prescription), prescriptionId);
 
-        if (prescription.Status != PrescriptionStatus.Active)
+        if (prescription.Status != PrescriptionStatus.Active && prescription.Status != PrescriptionStatus.PartiallyDispensed)
             throw new AppException($"Cannot dispense a prescription with status '{prescription.Status}'.", 400);
 
+        var now = DateTime.UtcNow;
+
+        // Mark all items as fully dispensed
+        foreach (var item in prescription.Items)
+        {
+            item.QuantityDispensed = item.Quantity;
+            item.IsFullyDispensed  = true;
+        }
+
+        // Create a dispense event for the full dispense
+        var dispenseEvent = new DispenseEvent
+        {
+            TenantId          = _tenantContext.TenantId,
+            PrescriptionId    = prescriptionId,
+            DispensedByUserId = _currentUser.UserId,
+            DispensedAt       = now,
+            Notes             = req.Notes,
+            Items             = prescription.Items.Select(item => new DispenseEventItem
+            {
+                TenantId           = _tenantContext.TenantId,
+                PrescriptionItemId = item.ItemId,
+                QuantityDispensed  = item.Quantity
+            }).ToList()
+        };
+
+        _db.DispenseEvents.Add(dispenseEvent);
+
         prescription.Status            = PrescriptionStatus.Dispensed;
-        prescription.DispensedAt       = DateTime.UtcNow;
+        prescription.DispensedAt       = now;
         prescription.DispensedByUserId = _currentUser.UserId;
 
         if (req.Notes is not null)
             prescription.Notes = string.IsNullOrWhiteSpace(prescription.Notes)
                 ? req.Notes
                 : $"{prescription.Notes}\n[Dispensing note] {req.Notes}";
+
+        await _db.SaveChangesAsync(ct);
+        return await LoadDetailAsync(prescriptionId, ct);
+    }
+
+    // ── Partial Dispense ──────────────────────────────────────────────────────
+
+    public async Task<PrescriptionDetailResponse> PartialDispenseAsync(Guid prescriptionId, PartialDispenseRequest req, CancellationToken ct = default)
+    {
+        var prescription = await _db.Prescriptions
+            .Include(p => p.Items)
+            .FirstOrDefaultAsync(p => p.PrescriptionId == prescriptionId, ct)
+            ?? throw new NotFoundException(nameof(Prescription), prescriptionId);
+
+        if (prescription.Status != PrescriptionStatus.Active && prescription.Status != PrescriptionStatus.PartiallyDispensed)
+            throw new AppException($"Cannot dispense a prescription with status '{prescription.Status}'.", 400);
+
+        if (!req.Items.Any(i => i.QuantityToDispense > 0))
+            throw new AppException("At least one item must have a quantity to dispense.", 400);
+
+        // Validate each requested item exists and won't be over-dispensed
+        var itemMap = prescription.Items.ToDictionary(i => i.ItemId);
+        foreach (var reqItem in req.Items.Where(i => i.QuantityToDispense > 0))
+        {
+            if (!itemMap.TryGetValue(reqItem.PrescriptionItemId, out var item))
+                throw new AppException($"Item {reqItem.PrescriptionItemId} does not belong to this prescription.", 400);
+
+            var remaining = item.Quantity - item.QuantityDispensed;
+            if (reqItem.QuantityToDispense > remaining)
+                throw new AppException($"Cannot dispense {reqItem.QuantityToDispense} of {item.MedicationName}: only {remaining} remaining.", 400);
+        }
+
+        var now = DateTime.UtcNow;
+
+        // Create dispense event
+        var eventItems = req.Items
+            .Where(i => i.QuantityToDispense > 0)
+            .Select(i => new DispenseEventItem
+            {
+                TenantId           = _tenantContext.TenantId,
+                PrescriptionItemId = i.PrescriptionItemId,
+                QuantityDispensed  = i.QuantityToDispense
+            }).ToList();
+
+        var dispenseEvent = new DispenseEvent
+        {
+            TenantId          = _tenantContext.TenantId,
+            PrescriptionId    = prescriptionId,
+            DispensedByUserId = _currentUser.UserId,
+            DispensedAt       = now,
+            Notes             = req.Notes,
+            Items             = eventItems
+        };
+
+        _db.DispenseEvents.Add(dispenseEvent);
+
+        // Update running totals on each item
+        foreach (var reqItem in req.Items.Where(i => i.QuantityToDispense > 0))
+        {
+            var item = itemMap[reqItem.PrescriptionItemId];
+            item.QuantityDispensed += reqItem.QuantityToDispense;
+            item.IsFullyDispensed   = item.QuantityDispensed >= item.Quantity;
+        }
+
+        // Set prescription status based on whether all items are fully dispensed
+        var allFullyDispensed = prescription.Items.All(i => i.IsFullyDispensed);
+        if (allFullyDispensed)
+        {
+            prescription.Status            = PrescriptionStatus.Dispensed;
+            prescription.DispensedAt       = now;
+            prescription.DispensedByUserId = _currentUser.UserId;
+        }
+        else
+        {
+            prescription.Status = PrescriptionStatus.PartiallyDispensed;
+        }
 
         await _db.SaveChangesAsync(ct);
         return await LoadDetailAsync(prescriptionId, ct);
@@ -155,7 +259,7 @@ public class PrescriptionService : IPrescriptionService
             .FirstOrDefaultAsync(p => p.PrescriptionId == prescriptionId, ct)
             ?? throw new NotFoundException(nameof(Prescription), prescriptionId);
 
-        if (prescription.Status != PrescriptionStatus.Active)
+        if (prescription.Status != PrescriptionStatus.Active && prescription.Status != PrescriptionStatus.PartiallyDispensed)
             throw new AppException($"Cannot cancel a prescription with status '{prescription.Status}'.", 400);
 
         prescription.Status = PrescriptionStatus.Cancelled;
@@ -172,6 +276,11 @@ public class PrescriptionService : IPrescriptionService
             .Include(p => p.PrescribedBy)
             .Include(p => p.DispensedBy)
             .Include(p => p.Items)
+            .Include(p => p.DispenseEvents)
+                .ThenInclude(e => e.DispensedBy)
+            .Include(p => p.DispenseEvents)
+                .ThenInclude(e => e.Items)
+                    .ThenInclude(i => i.PrescriptionItem)
             .FirstOrDefaultAsync(p => p.PrescriptionId == prescriptionId, ct)
             ?? throw new NotFoundException(nameof(Prescription), prescriptionId);
 
@@ -188,42 +297,42 @@ public class PrescriptionService : IPrescriptionService
 
     private static PrescriptionResponse MapToSummary(Prescription p) => new()
     {
-        PrescriptionId      = p.PrescriptionId,
-        ConsultationId      = p.ConsultationId,
-        PatientId           = p.PatientId,
-        PatientName         = $"{p.Patient.FirstName} {p.Patient.LastName}".Trim(),
-        MedicalRecordNumber = p.Patient.MedicalRecordNumber,
-        PrescribedByUserId  = p.PrescribedByUserId,
-        PrescribedByName    = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
-        PrescriptionDate    = p.PrescriptionDate,
-        ExpiresAt           = p.ExpiresAt,
-        Status              = p.Status,
-        ItemCount           = p.Items.Count,
+        PrescriptionId          = p.PrescriptionId,
+        ConsultationId          = p.ConsultationId,
+        PatientId               = p.PatientId,
+        PatientName             = $"{p.Patient.FirstName} {p.Patient.LastName}".Trim(),
+        MedicalRecordNumber     = p.Patient.MedicalRecordNumber,
+        PrescribedByUserId      = p.PrescribedByUserId,
+        PrescribedByName        = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
+        PrescriptionDate        = p.PrescriptionDate,
+        ExpiresAt               = p.ExpiresAt,
+        Status                  = p.Status,
+        ItemCount               = p.Items.Count,
         HasControlledSubstances = p.Items.Any(i => i.IsControlledSubstance),
-        CreatedAt           = p.CreatedAt
+        CreatedAt               = p.CreatedAt
     };
 
     private static PrescriptionDetailResponse MapToDetail(Prescription p) => new()
     {
-        PrescriptionId      = p.PrescriptionId,
-        ConsultationId      = p.ConsultationId,
-        PatientId           = p.PatientId,
-        PatientName         = $"{p.Patient.FirstName} {p.Patient.LastName}".Trim(),
-        MedicalRecordNumber = p.Patient.MedicalRecordNumber,
-        PrescribedByUserId  = p.PrescribedByUserId,
-        PrescribedByName    = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
-        PrescriptionDate    = p.PrescriptionDate,
-        ExpiresAt           = p.ExpiresAt,
-        Status              = p.Status,
-        ItemCount           = p.Items.Count,
+        PrescriptionId          = p.PrescriptionId,
+        ConsultationId          = p.ConsultationId,
+        PatientId               = p.PatientId,
+        PatientName             = $"{p.Patient.FirstName} {p.Patient.LastName}".Trim(),
+        MedicalRecordNumber     = p.Patient.MedicalRecordNumber,
+        PrescribedByUserId      = p.PrescribedByUserId,
+        PrescribedByName        = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
+        PrescriptionDate        = p.PrescriptionDate,
+        ExpiresAt               = p.ExpiresAt,
+        Status                  = p.Status,
+        ItemCount               = p.Items.Count,
         HasControlledSubstances = p.Items.Any(i => i.IsControlledSubstance),
-        Notes               = p.Notes,
-        DispensedAt         = p.DispensedAt,
-        DispensedByName     = p.DispensedBy is null ? null
-                                : $"{p.DispensedBy.FirstName} {p.DispensedBy.LastName}".Trim(),
-        CreatedAt           = p.CreatedAt,
-        UpdatedAt           = p.UpdatedAt,
-        Items               = p.Items.Select(i => new PrescriptionItemResponse
+        Notes                   = p.Notes,
+        DispensedAt             = p.DispensedAt,
+        DispensedByName         = p.DispensedBy is null ? null
+                                    : $"{p.DispensedBy.FirstName} {p.DispensedBy.LastName}".Trim(),
+        CreatedAt               = p.CreatedAt,
+        UpdatedAt               = p.UpdatedAt,
+        Items                   = p.Items.Select(i => new PrescriptionItemResponse
         {
             ItemId                = i.ItemId,
             MedicationName        = i.MedicationName,
@@ -235,7 +344,24 @@ public class PrescriptionService : IPrescriptionService
             Quantity              = i.Quantity,
             Refills               = i.Refills,
             Instructions          = i.Instructions,
-            IsControlledSubstance = i.IsControlledSubstance
-        }).ToList()
+            IsControlledSubstance = i.IsControlledSubstance,
+            QuantityDispensed     = i.QuantityDispensed,
+            IsFullyDispensed      = i.IsFullyDispensed
+        }).ToList(),
+        DispenseHistory = p.DispenseEvents
+            .OrderBy(e => e.DispensedAt)
+            .Select(e => new DispenseEventResponse
+            {
+                DispenseEventId = e.DispenseEventId,
+                DispensedAt     = e.DispensedAt,
+                DispensedByName = $"{e.DispensedBy.FirstName} {e.DispensedBy.LastName}".Trim(),
+                Notes           = e.Notes,
+                Items           = e.Items.Select(i => new DispenseEventItemResponse
+                {
+                    PrescriptionItemId = i.PrescriptionItemId,
+                    MedicationName     = i.PrescriptionItem.MedicationName,
+                    QuantityDispensed  = i.QuantityDispensed
+                }).ToList()
+            }).ToList()
     };
 }

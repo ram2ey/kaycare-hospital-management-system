@@ -8,6 +8,7 @@ import type { ConsultationSummaryResponse } from '../../types/consultations';
 import type { AllergyResponse } from '../../types/patients';
 import { DOSAGE_FORMS, FREQUENCIES } from '../../types/prescriptions';
 import MedicationAutocomplete from '../../components/MedicationAutocomplete';
+import TemplatePickerModal from '../../components/TemplatePickerModal';
 import type { MedicationEntry } from '../../data/medications';
 
 const emptyItem = (): PrescriptionItemRequest => ({
@@ -37,8 +38,9 @@ export default function CreatePrescriptionPage() {
   const [consultationId, setConsultationId] = useState(consultationIdParam);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<PrescriptionItemRequest[]>([emptyItem()]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [saving, setSaving]                   = useState(false);
+  const [error, setError]                     = useState('');
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   useEffect(() => {
     if (!patientId) return;
@@ -94,6 +96,12 @@ export default function CreatePrescriptionPage() {
     setSelectedMeds((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  function handleLoadTemplate(templateItems: PrescriptionItemRequest[], _name: string) {
+    setItems(templateItems);
+    setSelectedMeds(templateItems.map(() => null));
+    setShowTemplatePicker(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!consultationId) { setError('Please select a consultation.'); return; }
@@ -120,6 +128,7 @@ export default function CreatePrescriptionPage() {
   }
 
   return (
+    <>
     <div className="p-6 max-w-4xl">
       <div className="text-sm text-gray-500 mb-4">
         <Link to="/prescriptions" className="hover:text-blue-600">Prescriptions</Link>
@@ -194,13 +203,22 @@ export default function CreatePrescriptionPage() {
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
               Medications ({items.length})
             </h3>
-            <button
-              type="button"
-              onClick={addItem}
-              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
-            >
-              + Add Item
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTemplatePicker(true)}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Load Template
+              </button>
+              <button
+                type="button"
+                onClick={addItem}
+                className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                + Add Item
+              </button>
+            </div>
           </div>
 
           <div className="space-y-5">
@@ -356,5 +374,13 @@ export default function CreatePrescriptionPage() {
         </div>
       </form>
     </div>
+
+    {showTemplatePicker && (
+      <TemplatePickerModal
+        onSelect={handleLoadTemplate}
+        onClose={() => setShowTemplatePicker(false)}
+      />
+    )}
+    </>
   );
 }

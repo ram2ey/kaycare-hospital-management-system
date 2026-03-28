@@ -6,5 +6,6 @@ public class PrescriptionDetailResponse : PrescriptionResponse
     public DateTime? DispensedAt      { get; set; }
     public string?   DispensedByName  { get; set; }
     public DateTime  UpdatedAt        { get; set; }
-    public List<PrescriptionItemResponse> Items { get; set; } = [];
+    public List<PrescriptionItemResponse> Items          { get; set; } = [];
+    public List<DispenseEventResponse>    DispenseHistory { get; set; } = [];
 }

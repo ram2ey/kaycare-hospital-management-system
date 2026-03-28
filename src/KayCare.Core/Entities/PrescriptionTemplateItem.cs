@@ -1,8 +1,10 @@
-namespace KayCare.Core.DTOs.Prescriptions;
+namespace KayCare.Core.Entities;
 
-public class PrescriptionItemResponse
+public class PrescriptionTemplateItem
 {
-    public Guid    ItemId                { get; set; }
+    public Guid    TemplateItemId        { get; set; }
+    public Guid    TenantId              { get; set; }
+    public Guid    TemplateId            { get; set; }
     public string  MedicationName        { get; set; } = string.Empty;
     public string? GenericName           { get; set; }
     public string  Strength              { get; set; } = string.Empty;
@@ -12,7 +14,7 @@ public class PrescriptionItemResponse
     public int     Quantity              { get; set; }
     public int     Refills               { get; set; }
     public string? Instructions          { get; set; }
-    public bool IsControlledSubstance { get; set; }
-    public int  QuantityDispensed    { get; set; }
-    public bool IsFullyDispensed     { get; set; }
+    public bool    IsControlledSubstance { get; set; }
+
+    public PrescriptionTemplate Template { get; set; } = null!;
 }

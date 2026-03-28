@@ -11,4 +11,5 @@ public interface IPrescriptionService
     Task<IReadOnlyList<PrescriptionResponse>> GetPatientHistoryAsync(Guid patientId, CancellationToken ct = default);
     Task<IReadOnlyList<PrescriptionResponse>> GetByConsultationAsync(Guid consultationId, CancellationToken ct = default);
     Task<IReadOnlyList<PrescriptionResponse>> GetPendingAsync(CancellationToken ct = default);
+    Task<PrescriptionDetailResponse> PartialDispenseAsync(Guid prescriptionId, PartialDispenseRequest request, CancellationToken ct = default);
 }

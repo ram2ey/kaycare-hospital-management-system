@@ -14,7 +14,9 @@ public class PrescriptionItem
     public int    Quantity         { get; set; }
     public int    Refills          { get; set; }
     public string? Instructions    { get; set; }
-    public bool   IsControlledSubstance { get; set; }
+    public bool IsControlledSubstance { get; set; }
+    public int  QuantityDispensed    { get; set; }
+    public bool IsFullyDispensed     { get; set; }
 
     public Prescription Prescription { get; set; } = null!;
 }

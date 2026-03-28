@@ -91,6 +91,18 @@ public class PrescriptionsController : ControllerBase
         return File(pdf, "application/pdf", $"Prescription-{shortRef}.pdf");
     }
 
+    /// <summary>Pharmacist partially dispenses a prescription by item quantities.</summary>
+    [HttpPost("{id:guid}/partial-dispense")]
+    [Authorize(Roles = $"{Roles.Pharmacist},{Roles.Admin},{Roles.SuperAdmin}")]
+    [ProducesResponseType(typeof(PrescriptionDetailResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> PartialDispense(Guid id, [FromBody] PartialDispenseRequest request, CancellationToken ct)
+    {
+        var result = await _prescriptions.PartialDispenseAsync(id, request, ct);
+        return Ok(result);
+    }
+
     /// <summary>Cancel an active prescription. Status: Active → Cancelled.</summary>
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = $"{Roles.Doctor},{Roles.Admin},{Roles.SuperAdmin}")]

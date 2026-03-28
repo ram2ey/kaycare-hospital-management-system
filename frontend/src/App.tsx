@@ -15,6 +15,8 @@ import CreateConsultationPage from './pages/consultations/CreateConsultationPage
 import PrescriptionsPage from './pages/prescriptions/PrescriptionsPage';
 import PrescriptionDetailPage from './pages/prescriptions/PrescriptionDetailPage';
 import CreatePrescriptionPage from './pages/prescriptions/CreatePrescriptionPage';
+import TemplatesPage from './pages/prescriptions/TemplatesPage';
+import CreateEditTemplatePage from './pages/prescriptions/CreateEditTemplatePage';
 import BillingPage from './pages/billing/BillingPage';
 import BillDetailPage from './pages/billing/BillDetailPage';
 import CreateBillPage from './pages/billing/CreateBillPage';
@@ -48,6 +50,9 @@ export default function App() {
               <Route path="consultations/:id" element={<ConsultationDetailPage />} />
               <Route path="prescriptions" element={<PrescriptionsPage />} />
               <Route path="prescriptions/new" element={<CreatePrescriptionPage />} />
+              <Route path="prescriptions/templates" element={<TemplatesPage />} />
+              <Route path="prescriptions/templates/new" element={<CreateEditTemplatePage mode="create" />} />
+              <Route path="prescriptions/templates/:id/edit" element={<CreateEditTemplatePage mode="edit" />} />
               <Route path="prescriptions/:id" element={<PrescriptionDetailPage />} />
               <Route path="billing" element={<BillingPage />} />
               <Route path="billing/new" element={<CreateBillPage />} />

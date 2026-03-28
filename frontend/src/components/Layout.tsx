@@ -7,6 +7,7 @@ const navItems = [
   { to: '/appointments', label: 'Appointments', roles: null },
   { to: '/consultations', label: 'Consultations', roles: [Roles.Doctor, Roles.Nurse] },
   { to: '/prescriptions', label: 'Prescriptions', roles: null },
+  { to: '/prescriptions/templates', label: 'Rx Templates', roles: [Roles.Doctor, Roles.Admin, Roles.SuperAdmin] },
   { to: '/billing', label: 'Billing', roles: [Roles.Admin, Roles.Receptionist, Roles.SuperAdmin] },
   { to: '/documents', label: 'Documents', roles: null },
   { to: '/lab-orders', label: 'Lab Worklist', roles: null },

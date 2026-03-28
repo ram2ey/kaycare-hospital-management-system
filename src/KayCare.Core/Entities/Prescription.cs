@@ -17,5 +17,6 @@ public class Prescription : TenantEntity
     public User     PrescribedBy { get; set; } = null!;
     public User?    DispensedBy  { get; set; }
 
-    public ICollection<PrescriptionItem> Items { get; set; } = [];
+    public ICollection<PrescriptionItem> Items         { get; set; } = [];
+    public ICollection<DispenseEvent>    DispenseEvents { get; set; } = [];
 }

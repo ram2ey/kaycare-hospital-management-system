@@ -3,6 +3,7 @@ import type {
   PrescriptionResponse,
   PrescriptionDetailResponse,
   CreatePrescriptionRequest,
+  PartialDispenseRequest,
 } from '../types/prescriptions';
 
 export const getPending = () =>
@@ -28,3 +29,6 @@ export const cancelPrescription = (id: string) =>
 
 export const downloadPrescriptionReport = (id: string) =>
   apiClient.get(`/prescriptions/${id}/report`, { responseType: 'blob' }).then((r) => r.data as Blob);
+
+export const partialDispensePrescription = (id: string, data: PartialDispenseRequest) =>
+  apiClient.post<PrescriptionDetailResponse>(`/prescriptions/${id}/partial-dispense`, data).then((r) => r.data);

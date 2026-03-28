@@ -21,8 +21,12 @@ public class AppDbContext : DbContext
     public DbSet<PatientAllergy> PatientAllergies => Set<PatientAllergy>();
     public DbSet<Appointment>      Appointments      => Set<Appointment>();
     public DbSet<Consultation>     Consultations     => Set<Consultation>();
-    public DbSet<Prescription>     Prescriptions     => Set<Prescription>();
-    public DbSet<PrescriptionItem> PrescriptionItems => Set<PrescriptionItem>();
+    public DbSet<Prescription>             Prescriptions             => Set<Prescription>();
+    public DbSet<PrescriptionItem>         PrescriptionItems         => Set<PrescriptionItem>();
+    public DbSet<PrescriptionTemplate>     PrescriptionTemplates     => Set<PrescriptionTemplate>();
+    public DbSet<PrescriptionTemplateItem> PrescriptionTemplateItems => Set<PrescriptionTemplateItem>();
+    public DbSet<DispenseEvent>            DispenseEvents            => Set<DispenseEvent>();
+    public DbSet<DispenseEventItem>        DispenseEventItems        => Set<DispenseEventItem>();
     public DbSet<Bill>             Bills             => Set<Bill>();
     public DbSet<BillItem>         BillItems         => Set<BillItem>();
     public DbSet<Payment>          Payments          => Set<Payment>();
@@ -72,6 +76,14 @@ public class AppDbContext : DbContext
             .HasQueryFilter(i => i.TenantId == _tenantContext.TenantId);
         modelBuilder.Entity<AuditLog>()
             .HasQueryFilter(a => a.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<PrescriptionTemplate>()
+            .HasQueryFilter(t => t.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<PrescriptionTemplateItem>()
+            .HasQueryFilter(i => i.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<DispenseEvent>()
+            .HasQueryFilter(e => e.TenantId == _tenantContext.TenantId);
+        modelBuilder.Entity<DispenseEventItem>()
+            .HasQueryFilter(i => i.TenantId == _tenantContext.TenantId);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
