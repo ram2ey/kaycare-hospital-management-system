@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { createPrescription } from '../../api/prescriptions';
 import { getPatientConsultations } from '../../api/consultations';
+import { getAllergies } from '../../api/patients';
 import type { CreatePrescriptionRequest, PrescriptionItemRequest } from '../../types/prescriptions';
 import type { ConsultationSummaryResponse } from '../../types/consultations';
+import type { AllergyResponse } from '../../types/patients';
 import { DOSAGE_FORMS, FREQUENCIES } from '../../types/prescriptions';
 
 const emptyItem = (): PrescriptionItemRequest => ({
@@ -28,6 +30,7 @@ export default function CreatePrescriptionPage() {
   const consultationIdParam = searchParams.get('consultationId') ?? '';
 
   const [consultations, setConsultations] = useState<ConsultationSummaryResponse[]>([]);
+  const [drugAllergies, setDrugAllergies] = useState<AllergyResponse[]>([]);
   const [consultationId, setConsultationId] = useState(consultationIdParam);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<PrescriptionItemRequest[]>([emptyItem()]);
@@ -42,7 +45,24 @@ export default function CreatePrescriptionPage() {
         if (!consultationId && data.length === 1) setConsultationId(data[0].consultationId);
       })
       .catch(() => {});
+    getAllergies(patientId)
+      .then((data) => setDrugAllergies(data.filter((a) => a.allergyType === 'Drug')))
+      .catch(() => {});
   }, [patientId, consultationId]);
+
+  function getAllergyMatch(medicationName: string, genericName: string): AllergyResponse | undefined {
+    if (!medicationName && !genericName) return undefined;
+    const needle = (s: string) => s.toLowerCase().trim();
+    return drugAllergies.find((a) => {
+      const allergen = needle(a.allergenName);
+      return (
+        (medicationName && needle(medicationName).includes(allergen)) ||
+        (medicationName && allergen.includes(needle(medicationName))) ||
+        (genericName && needle(genericName).includes(allergen)) ||
+        (genericName && allergen.includes(needle(genericName)))
+      );
+    });
+  }
 
   function updateItem(i: number, field: keyof PrescriptionItemRequest, value: unknown) {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
@@ -89,6 +109,21 @@ export default function CreatePrescriptionPage() {
       </div>
 
       <h2 className="text-2xl font-semibold text-gray-800 mb-6">Write Prescription</h2>
+
+      {drugAllergies.length > 0 && (
+        <div className="mb-5 bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold mb-1">⚠ Known Drug Allergies</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {drugAllergies.map((a) => (
+              <li key={a.allergyId}>
+                <span className="font-medium">{a.allergenName}</span>
+                {a.severity && <span className="text-red-600"> · {a.severity}</span>}
+                {a.reaction && <span className="text-red-500"> — {a.reaction}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Consultation picker */}
@@ -164,6 +199,17 @@ export default function CreatePrescriptionPage() {
                     </button>
                   )}
                 </div>
+
+                {(() => {
+                  const match = getAllergyMatch(item.medicationName, item.genericName ?? '');
+                  return match ? (
+                    <div className="mb-3 bg-red-50 border border-red-300 px-3 py-2 text-xs text-red-800 font-medium">
+                      ⚠ Allergy alert: Patient is allergic to <strong>{match.allergenName}</strong>
+                      {match.severity && <> ({match.severity})</>}
+                      {match.reaction && <> — {match.reaction}</>}
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">

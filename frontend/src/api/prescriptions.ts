@@ -25,3 +25,6 @@ export const dispensePrescription = (id: string, notes?: string) =>
 
 export const cancelPrescription = (id: string) =>
   apiClient.post<PrescriptionDetailResponse>(`/prescriptions/${id}/cancel`).then((r) => r.data);
+
+export const downloadPrescriptionReport = (id: string) =>
+  apiClient.get(`/prescriptions/${id}/report`, { responseType: 'blob' }).then((r) => r.data as Blob);

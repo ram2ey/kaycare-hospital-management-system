@@ -9,8 +9,9 @@ public class PrescriptionResponse
     public string   MedicalRecordNumber{ get; set; } = string.Empty;
     public Guid     PrescribedByUserId { get; set; }
     public string   PrescribedByName   { get; set; } = string.Empty;
-    public DateOnly PrescriptionDate   { get; set; }
-    public string   Status             { get; set; } = string.Empty;
+    public DateOnly  PrescriptionDate   { get; set; }
+    public DateOnly? ExpiresAt          { get; set; }
+    public string    Status             { get; set; } = string.Empty;
     public int      ItemCount          { get; set; }
     public bool     HasControlledSubstances { get; set; }
     public DateTime CreatedAt          { get; set; }

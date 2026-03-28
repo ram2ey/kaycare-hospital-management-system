@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getPrescription, dispensePrescription, cancelPrescription } from '../../api/prescriptions';
+import { getPrescription, dispensePrescription, cancelPrescription, downloadPrescriptionReport } from '../../api/prescriptions';
 import type { PrescriptionDetailResponse } from '../../types/prescriptions';
 import { STATUS_COLORS } from '../../types/prescriptions';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,6 +15,7 @@ export default function PrescriptionDetailPage() {
   const [error, setError] = useState('');
   const [dispensing, setDispensing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [dispenseNotes, setDispenseNotes] = useState('');
   const [showDispenseModal, setShowDispenseModal] = useState(false);
 
@@ -41,6 +42,24 @@ export default function PrescriptionDetailPage() {
     }
   }
 
+  async function handleDownload() {
+    if (!id) return;
+    setDownloading(true);
+    try {
+      const blob = await downloadPrescriptionReport(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Prescription-${id.slice(0, 8).toUpperCase()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Failed to download prescription PDF.');
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   async function handleCancel() {
     if (!id || !confirm('Cancel this prescription?')) return;
     setCancelling(true);
@@ -57,6 +76,12 @@ export default function PrescriptionDetailPage() {
 
   const canDispense = user && [Roles.Pharmacist, Roles.Admin, Roles.SuperAdmin].includes(user.role as never);
   const canCancel   = user && [Roles.Doctor, Roles.Admin, Roles.SuperAdmin].includes(user.role as never);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiryDate  = rx?.expiresAt ? new Date(rx.expiresAt) : null;
+  const daysToExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - today.getTime()) / 86400000) : null;
+  const expiringSoon = daysToExpiry !== null && daysToExpiry >= 0 && daysToExpiry <= 7 && rx?.status === 'Active';
 
   if (loading) return <div className="p-8 text-gray-400">Loading…</div>;
   if (error || !rx) return <div className="p-8 text-red-600">{error || 'Not found.'}</div>;
@@ -82,6 +107,13 @@ export default function PrescriptionDetailPage() {
           <span className={`text-sm font-medium px-3 py-1.5 rounded-full ${STATUS_COLORS[rx.status] ?? 'bg-gray-100 text-gray-600'}`}>
             {rx.status}
           </span>
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+          >
+            {downloading ? 'Downloading…' : 'Download PDF'}
+          </button>
           {rx.status === 'Active' && canDispense && (
             <button
               onClick={() => setShowDispenseModal(true)}
@@ -102,6 +134,14 @@ export default function PrescriptionDetailPage() {
         </div>
       </div>
 
+      {expiringSoon && (
+        <div className="mb-5 bg-orange-50 border border-orange-300 px-4 py-3 text-sm text-orange-800 font-medium">
+          ⚠ This prescription expires in <strong>{daysToExpiry} day{daysToExpiry !== 1 ? 's' : ''}</strong>
+          {expiryDate && <> ({expiryDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})</>}.
+          Dispense before it expires.
+        </div>
+      )}
+
       <div className="space-y-5">
         {/* Meta */}
         <div className="grid grid-cols-2 gap-5">
@@ -121,6 +161,7 @@ export default function PrescriptionDetailPage() {
           <section className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Dispensing Info</h3>
             <dl className="space-y-2.5">
+              <Row label="Expires On" value={expiryDate ? expiryDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'} />
               <Row label="Dispensed By" value={rx.dispensedByName} />
               <Row label="Dispensed At" value={rx.dispensedAt ? new Date(rx.dispensedAt).toLocaleString('en-GB') : null} />
             </dl>

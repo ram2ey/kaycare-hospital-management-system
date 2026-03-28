@@ -11,11 +11,13 @@ namespace KayCare.API.Controllers;
 [Authorize]
 public class PrescriptionsController : ControllerBase
 {
-    private readonly IPrescriptionService _prescriptions;
+    private readonly IPrescriptionService       _prescriptions;
+    private readonly IPrescriptionReportService _report;
 
-    public PrescriptionsController(IPrescriptionService prescriptions)
+    public PrescriptionsController(IPrescriptionService prescriptions, IPrescriptionReportService report)
     {
         _prescriptions = prescriptions;
+        _report        = report;
     }
 
     /// <summary>Pharmacist work queue — all Active prescriptions, oldest first.</summary>
@@ -75,6 +77,18 @@ public class PrescriptionsController : ControllerBase
     {
         var result = await _prescriptions.DispenseAsync(id, request, ct);
         return Ok(result);
+    }
+
+    /// <summary>Download a PDF prescription slip.</summary>
+    [HttpGet("{id:guid}/report")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetReport(Guid id, CancellationToken ct)
+    {
+        var pdf = await _report.GeneratePrescriptionReportAsync(id, ct);
+        if (pdf == null) return NotFound();
+        var shortRef = id.ToString("N")[..8].ToUpperInvariant();
+        return File(pdf, "application/pdf", $"Prescription-{shortRef}.pdf");
     }
 
     /// <summary>Cancel an active prescription. Status: Active → Cancelled.</summary>

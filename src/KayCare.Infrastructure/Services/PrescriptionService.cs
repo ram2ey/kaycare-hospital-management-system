@@ -32,12 +32,14 @@ public class PrescriptionService : IPrescriptionService
         if (!req.Items.Any())
             throw new AppException("A prescription must contain at least one medication.", 400);
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var prescription = new Prescription
         {
             ConsultationId     = req.ConsultationId,
             PatientId          = consultation.PatientId,
             PrescribedByUserId = _currentUser.UserId,
-            PrescriptionDate   = DateOnly.FromDateTime(DateTime.UtcNow),
+            PrescriptionDate   = today,
+            ExpiresAt          = today.AddDays(30),
             Status             = PrescriptionStatus.Active,
             Notes              = req.Notes
         };
@@ -105,12 +107,15 @@ public class PrescriptionService : IPrescriptionService
 
     public async Task<IReadOnlyList<PrescriptionResponse>> GetPendingAsync(CancellationToken ct = default)
     {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
         var rows = await _db.Prescriptions
             .Include(p => p.Patient)
             .Include(p => p.PrescribedBy)
             .Include(p => p.Items)
             .AsNoTracking()
-            .Where(p => p.Status == PrescriptionStatus.Active)
+            .Where(p => p.Status == PrescriptionStatus.Active
+                     && (p.ExpiresAt == null || p.ExpiresAt >= today))
             .OrderBy(p => p.PrescriptionDate)
             .ThenBy(p => p.CreatedAt)
             .ToListAsync(ct);
@@ -167,9 +172,16 @@ public class PrescriptionService : IPrescriptionService
             .Include(p => p.PrescribedBy)
             .Include(p => p.DispensedBy)
             .Include(p => p.Items)
-            .AsNoTracking()
             .FirstOrDefaultAsync(p => p.PrescriptionId == prescriptionId, ct)
             ?? throw new NotFoundException(nameof(Prescription), prescriptionId);
+
+        // Auto-expire if Active and past expiry date
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (p.Status == PrescriptionStatus.Active && p.ExpiresAt.HasValue && p.ExpiresAt.Value < today)
+        {
+            p.Status = PrescriptionStatus.Expired;
+            await _db.SaveChangesAsync(ct);
+        }
 
         return MapToDetail(p);
     }
@@ -184,6 +196,7 @@ public class PrescriptionService : IPrescriptionService
         PrescribedByUserId  = p.PrescribedByUserId,
         PrescribedByName    = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
         PrescriptionDate    = p.PrescriptionDate,
+        ExpiresAt           = p.ExpiresAt,
         Status              = p.Status,
         ItemCount           = p.Items.Count,
         HasControlledSubstances = p.Items.Any(i => i.IsControlledSubstance),
@@ -200,6 +213,7 @@ public class PrescriptionService : IPrescriptionService
         PrescribedByUserId  = p.PrescribedByUserId,
         PrescribedByName    = $"{p.PrescribedBy.FirstName} {p.PrescribedBy.LastName}".Trim(),
         PrescriptionDate    = p.PrescriptionDate,
+        ExpiresAt           = p.ExpiresAt,
         Status              = p.Status,
         ItemCount           = p.Items.Count,
         HasControlledSubstances = p.Items.Any(i => i.IsControlledSubstance),

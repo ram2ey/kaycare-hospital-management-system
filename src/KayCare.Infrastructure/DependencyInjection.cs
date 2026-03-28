@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<ILabResultService, LabResultService>();
         services.AddScoped<ILabOrderService, LabOrderService>();
         services.AddScoped<ILabReportService, LabReportService>();
+        services.AddScoped<IPrescriptionReportService, PrescriptionReportService>();
         services.AddScoped<IAuditService, AuditService>();
 
         // MLLP TCP listener — runs for the lifetime of the application

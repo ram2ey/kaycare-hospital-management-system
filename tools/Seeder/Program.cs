@@ -1,6 +1,9 @@
 using Microsoft.Data.SqlClient;
 
-var connStr = "Server=.\\SQLEXPRESS;Database=MediCloudDb;Integrated Security=True;TrustServerCertificate=True;";
+var connStr = args.Length > 0
+    ? args[0]
+    : "Server=.\\SQLEXPRESS;Database=KayCareDb;Integrated Security=True;TrustServerCertificate=True;";
+
 var tenantId = Guid.NewGuid();
 var userId = Guid.NewGuid();
 var now = DateTime.UtcNow;
@@ -8,7 +11,7 @@ var now = DateTime.UtcNow;
 Console.WriteLine("Hashing password (bcrypt cost 12, takes a few seconds)...");
 var hash = BCrypt.Net.BCrypt.HashPassword("Admin@1234", 12);
 
-Console.WriteLine("Connecting to MediCloudDb...");
+Console.WriteLine("Connecting to database...");
 using var conn = new SqlConnection(connStr);
 conn.Open();
 

@@ -7,6 +7,7 @@ public class Prescription : TenantEntity
     public Guid      PatientId          { get; set; }
     public Guid      PrescribedByUserId { get; set; }
     public DateOnly  PrescriptionDate   { get; set; }
+    public DateOnly? ExpiresAt          { get; set; }
     public string    Status             { get; set; } = "Active";
     public string?   Notes              { get; set; }
     public DateTime? DispensedAt        { get; set; }

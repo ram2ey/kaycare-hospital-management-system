@@ -34,6 +34,7 @@ export interface PrescriptionResponse {
   prescribedByUserId: string;
   prescribedByName: string;
   prescriptionDate: string;
+  expiresAt: string | null;
   status: string;
   itemCount: number;
   hasControlledSubstances: boolean;
@@ -58,6 +59,7 @@ export const STATUS_COLORS: Record<string, string> = {
   Active:     'bg-blue-100 text-blue-700',
   Dispensed:  'bg-green-100 text-green-700',
   Cancelled:  'bg-gray-100 text-gray-500',
+  Expired:    'bg-orange-100 text-orange-700',
 };
 
 export const DOSAGE_FORMS = [
