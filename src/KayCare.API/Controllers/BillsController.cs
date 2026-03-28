@@ -11,11 +11,13 @@ namespace KayCare.API.Controllers;
 [Authorize]
 public class BillsController : ControllerBase
 {
-    private readonly IBillingService _billing;
+    private readonly IBillingService       _billing;
+    private readonly IBillingReportService _report;
 
-    public BillsController(IBillingService billing)
+    public BillsController(IBillingService billing, IBillingReportService report)
     {
         _billing = billing;
+        _report  = report;
     }
 
     /// <summary>All outstanding bills (Issued or PartiallyPaid) for the tenant.</summary>
@@ -103,5 +105,27 @@ public class BillsController : ControllerBase
     {
         var result = await _billing.VoidAsync(id, ct);
         return Ok(result);
+    }
+
+    /// <summary>Download a PDF invoice for the bill.</summary>
+    [HttpGet("{id:guid}/report")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetInvoice(Guid id, CancellationToken ct)
+    {
+        var pdf = await _report.GenerateBillInvoiceAsync(id, ct);
+        if (pdf == null) return NotFound();
+        return File(pdf, "application/pdf", $"Invoice-{id.ToString("N")[..8]}.pdf");
+    }
+
+    /// <summary>Download a PDF payment receipt.</summary>
+    [HttpGet("payments/{paymentId:guid}/receipt")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetReceipt(Guid paymentId, CancellationToken ct)
+    {
+        var pdf = await _report.GeneratePaymentReceiptAsync(paymentId, ct);
+        if (pdf == null) return NotFound();
+        return File(pdf, "application/pdf", $"Receipt-{paymentId.ToString("N")[..8]}.pdf");
     }
 }

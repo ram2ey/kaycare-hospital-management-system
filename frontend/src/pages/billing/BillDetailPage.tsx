@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getBill, issueBill, addPayment, cancelBill, voidBill } from '../../api/billing';
+import { getBill, issueBill, addPayment, cancelBill, voidBill, downloadInvoice, downloadReceipt } from '../../api/billing';
 import type { BillDetailResponse, AddPaymentRequest } from '../../types/billing';
 import { STATUS_COLORS, PAYMENT_METHODS } from '../../types/billing';
 import { useAuth } from '../../contexts/AuthContext';
@@ -58,6 +58,28 @@ export default function BillDetailPage() {
     }
   }
 
+  function openBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleDownloadInvoice() {
+    if (!id) return;
+    setActing('invoice');
+    try { openBlob(await downloadInvoice(id), `${bill!.billNumber}.pdf`); }
+    catch { alert('Failed to download invoice.'); }
+    finally { setActing(''); }
+  }
+
+  async function handleDownloadReceipt(paymentId: string, index: number) {
+    setActing(`receipt-${paymentId}`);
+    try { openBlob(await downloadReceipt(paymentId), `Receipt-${index + 1}.pdf`); }
+    catch { alert('Failed to download receipt.'); }
+    finally { setActing(''); }
+  }
+
   const canBill   = user && BILLING_ROLES.includes(user.role as never);
   const canAdmin  = user && [Roles.Admin, Roles.SuperAdmin].includes(user.role as never);
 
@@ -91,6 +113,10 @@ export default function BillDetailPage() {
           <span className={`text-sm font-medium px-3 py-1.5 rounded-full ${STATUS_COLORS[bill.status] ?? 'bg-gray-100 text-gray-600'}`}>
             {bill.status}
           </span>
+          <button onClick={handleDownloadInvoice} disabled={!!acting}
+            className="px-4 py-2 border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium rounded-lg disabled:opacity-50 transition-colors">
+            {acting === 'invoice' ? 'Downloading…' : 'Download Invoice'}
+          </button>
           {canBill && isIssuable && (
             <button onClick={() => doAction('issue', () => issueBill(id!))} disabled={!!acting}
               className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors">
@@ -177,10 +203,11 @@ export default function BillDetailPage() {
                   <th className="text-left px-5 py-2.5 font-medium text-gray-500 text-xs uppercase">Reference</th>
                   <th className="text-left px-5 py-2.5 font-medium text-gray-500 text-xs uppercase">Received By</th>
                   <th className="text-right px-5 py-2.5 font-medium text-gray-500 text-xs uppercase">Amount</th>
+                  <th className="px-5 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {bill.payments.map((p) => (
+                {bill.payments.map((p, idx) => (
                   <tr key={p.paymentId}>
                     <td className="px-5 py-3 text-gray-600">
                       {new Date(p.paymentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -189,6 +216,15 @@ export default function BillDetailPage() {
                     <td className="px-5 py-3 text-gray-500">{p.reference ?? '—'}</td>
                     <td className="px-5 py-3 text-gray-600">{p.receivedByName}</td>
                     <td className="px-5 py-3 text-right font-medium text-green-700">{fmt(p.amount)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => handleDownloadReceipt(p.paymentId, idx)}
+                        disabled={acting === `receipt-${p.paymentId}`}
+                        className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                      >
+                        {acting === `receipt-${p.paymentId}` ? 'Downloading…' : 'Receipt'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

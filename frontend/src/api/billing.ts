@@ -29,3 +29,9 @@ export const cancelBill = (id: string) =>
 
 export const voidBill = (id: string) =>
   apiClient.post<BillDetailResponse>(`/bills/${id}/void`).then((r) => r.data);
+
+export const downloadInvoice = (id: string) =>
+  apiClient.get(`/bills/${id}/report`, { responseType: 'blob' }).then((r) => r.data as Blob);
+
+export const downloadReceipt = (paymentId: string) =>
+  apiClient.get(`/bills/payments/${paymentId}/receipt`, { responseType: 'blob' }).then((r) => r.data as Blob);

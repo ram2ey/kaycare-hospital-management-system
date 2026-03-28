@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { createBill } from '../../api/billing';
+import { getCatalog } from '../../api/serviceCatalog';
 import { searchPatients } from '../../api/patients';
 import type { CreateBillRequest, BillItemRequest } from '../../types/billing';
 import type { PatientResponse } from '../../types/patients';
+import type { ServiceCatalogItem } from '../../types/serviceCatalog';
 import { BILL_CATEGORIES } from '../../types/billing';
 
 const inp = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
@@ -23,6 +25,15 @@ export default function CreateBillPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Catalog picker
+  const [catalog, setCatalog] = useState<ServiceCatalogItem[]>([]);
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+
+  useEffect(() => {
+    getCatalog(true).then(setCatalog).catch(() => {});
+  }, []);
+
   async function searchForPatient() {
     if (!patientQuery.trim()) return;
     setSearching(true);
@@ -37,6 +48,32 @@ export default function CreateBillPage() {
   function updateItem(i: number, field: keyof BillItemRequest, value: unknown) {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
   }
+
+  function addFromCatalog(catalogItem: ServiceCatalogItem) {
+    // If last row is still empty, replace it; otherwise append
+    setItems((prev) => {
+      const last = prev[prev.length - 1];
+      const newItem: BillItemRequest = {
+        description: catalogItem.name,
+        category: catalogItem.category,
+        quantity: 1,
+        unitPrice: catalogItem.unitPrice,
+      };
+      if (!last.description && last.quantity === 1 && last.unitPrice === 0) {
+        return [...prev.slice(0, -1), newItem];
+      }
+      return [...prev, newItem];
+    });
+    setShowCatalog(false);
+    setCatalogSearch('');
+  }
+
+  const filteredCatalog = catalogSearch
+    ? catalog.filter((c) =>
+        c.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+        c.category.toLowerCase().includes(catalogSearch.toLowerCase())
+      )
+    : catalog;
 
   const totalAmount = items.reduce((s, it) => s + it.quantity * it.unitPrice, 0);
 
@@ -117,10 +154,18 @@ export default function CreateBillPage() {
         <section className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Line Items</h3>
-            <button type="button" onClick={() => setItems((p) => [...p, emptyItem()])}
-              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-3 py-1.5 rounded-lg transition-colors">
-              + Add Item
-            </button>
+            <div className="flex gap-2">
+              {catalog.length > 0 && (
+                <button type="button" onClick={() => setShowCatalog(true)}
+                  className="text-xs bg-gray-50 hover:bg-gray-100 text-gray-700 font-medium px-3 py-1.5 rounded-lg border border-gray-300 transition-colors">
+                  From Catalog
+                </button>
+              )}
+              <button type="button" onClick={() => setItems((p) => [...p, emptyItem()])}
+                className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium px-3 py-1.5 rounded-lg transition-colors">
+                + Add Item
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -189,6 +234,49 @@ export default function CreateBillPage() {
           </button>
         </div>
       </form>
+
+      {/* Catalog picker modal */}
+      {showCatalog && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Price Catalog</h3>
+              <button onClick={() => { setShowCatalog(false); setCatalogSearch(''); }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+            </div>
+            <input
+              type="text"
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Search by name or category…"
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+            />
+            <div className="overflow-y-auto flex-1 -mx-1">
+              {filteredCatalog.length === 0 ? (
+                <p className="text-sm text-gray-400 px-1 py-4">No items match.</p>
+              ) : (
+                filteredCatalog.map((item) => (
+                  <button
+                    key={item.serviceCatalogItemId}
+                    type="button"
+                    onClick={() => addFromCatalog(item)}
+                    className="w-full text-left px-3 py-3 hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-between group"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 group-hover:text-blue-700">{item.name}</p>
+                      <p className="text-xs text-gray-400">{item.category}</p>
+                    </div>
+                    <span className="text-sm font-mono font-semibold text-gray-700 group-hover:text-blue-700">
+                      {fmt(item.unitPrice)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

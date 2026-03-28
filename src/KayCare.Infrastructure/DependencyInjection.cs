@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IPrescriptionService, PrescriptionService>();
         services.AddScoped<IPrescriptionTemplateService, PrescriptionTemplateService>();
         services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 
         // Azure Blob Storage — singleton client; per-request scoped service
         services.AddSingleton(_ =>
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<ILabOrderService, LabOrderService>();
         services.AddScoped<ILabReportService, LabReportService>();
         services.AddScoped<IPrescriptionReportService, PrescriptionReportService>();
+        services.AddScoped<IBillingReportService, BillingReportService>();
         services.AddScoped<IAuditService, AuditService>();
 
         // MLLP TCP listener — runs for the lifetime of the application
