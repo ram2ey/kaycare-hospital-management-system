@@ -7,6 +7,8 @@ import type { CreatePrescriptionRequest, PrescriptionItemRequest } from '../../t
 import type { ConsultationSummaryResponse } from '../../types/consultations';
 import type { AllergyResponse } from '../../types/patients';
 import { DOSAGE_FORMS, FREQUENCIES } from '../../types/prescriptions';
+import MedicationAutocomplete from '../../components/MedicationAutocomplete';
+import type { MedicationEntry } from '../../data/medications';
 
 const emptyItem = (): PrescriptionItemRequest => ({
   medicationName: '',
@@ -31,6 +33,7 @@ export default function CreatePrescriptionPage() {
 
   const [consultations, setConsultations] = useState<ConsultationSummaryResponse[]>([]);
   const [drugAllergies, setDrugAllergies] = useState<AllergyResponse[]>([]);
+  const [selectedMeds, setSelectedMeds] = useState<(MedicationEntry | null)[]>([null]);
   const [consultationId, setConsultationId] = useState(consultationIdParam);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<PrescriptionItemRequest[]>([emptyItem()]);
@@ -68,11 +71,27 @@ export default function CreatePrescriptionPage() {
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
   }
 
-  function addItem() { setItems((prev) => [...prev, emptyItem()]); }
+  function handleMedicationSelect(i: number, med: MedicationEntry) {
+    setItems((prev) => prev.map((item, idx) => idx !== i ? item : {
+      ...item,
+      medicationName:        med.name,
+      genericName:           med.genericName,
+      strength:              med.strengths[0],
+      dosageForm:            med.dosageForm,
+      isControlledSubstance: med.isControlledSubstance ?? false,
+    }));
+    setSelectedMeds((prev) => prev.map((m, idx) => idx === i ? med : m));
+  }
+
+  function addItem() {
+    setItems((prev) => [...prev, emptyItem()]);
+    setSelectedMeds((prev) => [...prev, null]);
+  }
 
   function removeItem(i: number) {
     if (items.length === 1) return;
     setItems((prev) => prev.filter((_, idx) => idx !== i));
+    setSelectedMeds((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -214,9 +233,13 @@ export default function CreatePrescriptionPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
                     <label className="block text-xs text-gray-600 mb-1">Medication Name *</label>
-                    <input required value={item.medicationName}
-                      onChange={(e) => updateItem(i, 'medicationName', e.target.value)}
-                      placeholder="e.g. Amoxicillin" className={inp} />
+                    <MedicationAutocomplete
+                      value={item.medicationName}
+                      onChange={(v) => updateItem(i, 'medicationName', v)}
+                      onSelect={(med) => handleMedicationSelect(i, med)}
+                      placeholder="Search medication…"
+                      className={inp}
+                    />
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Generic Name</label>
@@ -230,6 +253,24 @@ export default function CreatePrescriptionPage() {
                     <input required value={item.strength}
                       onChange={(e) => updateItem(i, 'strength', e.target.value)}
                       placeholder="e.g. 500mg" className={inp} />
+                    {selectedMeds[i] && selectedMeds[i]!.strengths.length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedMeds[i]!.strengths.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => updateItem(i, 'strength', s)}
+                            className={`text-xs px-2 py-0.5 border transition-colors ${
+                              item.strength === s
+                                ? 'bg-blue-100 border-blue-400 text-blue-700'
+                                : 'border-gray-300 text-gray-500 hover:border-gray-400'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Dosage Form *</label>
