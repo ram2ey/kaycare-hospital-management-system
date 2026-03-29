@@ -17,6 +17,7 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
             .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../KayCare.API"))
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddEnvironmentVariables()
             .Build();
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
